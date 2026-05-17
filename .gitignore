@@ -1,0 +1,36 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual / conda environments (optional but recommended)
+env/
+venv/
+.venv/
+testgen/
+
+# Hugging Face / model outputs
+results/
+testgen_model/
+models/
+outputs/
+
+# Hugging Face cache
+.cache/
+.huggingface/
+
+# Logs
+*.log
+outputs/*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter (if you ever use notebooks)
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/

@@ -1,0 +1,1 @@
+Use the `run.sh` file to train the model and run the inference script.
