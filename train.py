@@ -16,7 +16,7 @@ model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
 with open("data/train.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
-data = data[:10]
+data = data[:500]
 
 def extract_asserts(code):
     lines = []
@@ -51,24 +51,27 @@ def tokenize(example):
         example["output"],
         truncation=True,
         padding="max_length",
-        max_length=512
+        max_length=128
     )
 
-    model_inputs["labels"] = labels["input_ids"]
+    label_ids = labels["input_ids"]
+    model_inputs["labels"] = [
+        tok if tok != tokenizer.pad_token_id else -100
+        for tok in label_ids
+    ]
     return model_inputs
 
 tokenized = dataset.map(tokenize)
 
 training_args = TrainingArguments(
     output_dir="./results",
-    per_device_train_batch_size=2,
-    num_train_epochs=1,
-    logging_steps=1,
+    per_device_train_batch_size=4,
+    num_train_epochs=5,
+    logging_steps=50,
     logging_dir="./logs",
     report_to="none",
-    disable_tqdm=False,
-    log_level="info",
-    save_steps=100,
+    save_steps=500,
+    save_total_limit=2,
 )
 
 trainer = Trainer(
