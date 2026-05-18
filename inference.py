@@ -6,7 +6,6 @@ import os
 os.makedirs("outputs", exist_ok=True)
 
 model_path = "./testgen_model"
-#model_path = "./results/checkpoint-800"
 
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
