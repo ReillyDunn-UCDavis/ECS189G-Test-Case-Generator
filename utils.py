@@ -3,6 +3,73 @@ import ast
 import textwrap
 import inspect
 
+
+EDGE_CASES = {
+    "str":       ['""', '"a"', '"aa"', '"ab"'],
+    "int":       ["0", "1", "-1"],
+    "List[int]": ["[]", "[0]", "[1, 1]", "[1, -1]"],
+    "List[str]": ['[]', '["a"]'],
+    "bool":      ["True", "False"],
+}
+
+
+def generate_edge_case_call(solution_code: str, func_name: str) -> str | None:
+    """
+    Builds one edge-case input call using the simplest known value for
+    each parameter type. Used to supplement training data.
+    """
+    params = extract_params_with_types(solution_code, func_name)
+    if not params:
+        return None
+
+    parts = []
+    for name, type_str in params:
+        pool = next(
+            (v for k, v in EDGE_CASES.items() if k in type_str),
+            ["0"]
+        )
+        parts.append(f"{name}={pool[0]}")   # always take the simplest value
+
+    call = f"candidate({', '.join(parts)})"
+    return call if is_valid_python(call) else None
+
+
+def extract_params_with_types(solution_code: str, func_name: str) -> list[tuple[str, str]]:
+    """
+    Returns [(param_name, type_str), ...] for the given function, excluding self.
+    Type is taken from the annotation if present, else "unknown".
+
+    Example: def twoSum(self, nums: List[int], target: int)
+          -> [("nums", "List[int]"), ("target", "int")]
+    """
+    ns = {}
+    try:
+        exec(textwrap.dedent(solution_code), ns)
+        func = getattr(ns["Solution"], func_name)
+        hints = {}
+        try:
+            import typing
+            hints = typing.get_type_hints(func)
+        except Exception:
+            pass
+        sig = inspect.signature(func)
+        result = []
+        for name, param in sig.parameters.items():
+            if name == "self":
+                continue
+            if name in hints:
+                type_str = str(hints[name])
+                type_str = type_str.replace("typing.", "")
+            elif param.annotation is not inspect.Parameter.empty:
+                type_str = str(param.annotation)
+            else:
+                type_str = "unknown"
+            result.append((name, type_str))
+        return result
+    except Exception:
+        return []
+    
+
 def is_valid_python(line):
     try:
         ast.parse(line)

@@ -11,7 +11,9 @@ from utils import (
     simplify_assert,
     extract_input_args,
     extract_signature,
-    extract_body
+    extract_body,
+    generate_edge_case_call,
+    extract_func_name,
 )
 
 # -- CONFIG -----------------------------------------------
@@ -89,6 +91,10 @@ def build_pairs(data: list) -> list:
         if not calls:
             continue
 
+        edge = generate_edge_case_call(item["solution_code"], extract_func_name(item["solution_code"]))
+        if edge and edge not in calls:
+            calls.insert(0, edge)
+
         for call in calls:
             pairs.append({
                 "input":  build_prompt(signature, body),
@@ -125,44 +131,52 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
+    # Load data
     with open("data/train.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
+        train_data = json.load(f)
+    train_data = train_data[:MAX_SAMPLES]
 
-    data = data[:MAX_SAMPLES]
+    with open("data/test.json", "r", encoding="utf-8") as f:
+        val_data = json.load(f)
 
-    pairs = build_pairs(data)
-    print(f"Training pairs built: {len(pairs)}")
+    # Build pairs
+    train_pairs = build_pairs(train_data)
+    val_pairs   = build_pairs(val_data)
+    print(f"Train: {len(train_pairs)}  Val: {len(val_pairs)}")
 
-    for i, p in enumerate(pairs[:3]):
-        print(f"\n--- Example {i} ---")
-        print("INPUT:\n", p["input"])
-        print("OUTPUT:\n", p["output"])
-    
+    # Load model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=False)
-    model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME).to(device)
+    model     = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME).to(device)
 
-    dataset = Dataset.from_list(pairs)
+    # Tokenize
     tokenize = make_tokenize_fn(tokenizer)
-    tokenized = dataset.map(tokenize, remove_columns=["input", "output"])
+    train_ds = Dataset.from_list(train_pairs).map(tokenize, remove_columns=["input", "output"])
+    val_ds   = Dataset.from_list(val_pairs).map(tokenize,   remove_columns=["input", "output"])
 
+    # Train
     training_args = TrainingArguments(
-        output_dir            = "./results",
+        output_dir                  = "./results",
         per_device_train_batch_size = 4,
-        num_train_epochs      = 5,
-        learning_rate         = 2e-5,
-        logging_steps         = 50,
-        logging_dir           = "./logs",
-        report_to             = "none",
-        save_steps            = 500,
-        save_total_limit      = 2,
+        num_train_epochs            = 10,
+        learning_rate               = 2e-5,
+        logging_steps               = 50,
+        logging_dir                 = "./logs",
+        report_to                   = "none",
+        save_strategy               = "epoch",
+        save_total_limit            = 2,
+        evaluation_strategy         = "epoch",
+        load_best_model_at_end      = True,
+        metric_for_best_model       = "eval_loss",
     )
     trainer = Trainer(
-        model        = model,
-        args         = training_args,
-        train_dataset = tokenized,
+        model         = model,
+        args          = training_args,
+        train_dataset = train_ds,
+        eval_dataset  = val_ds,
     )
     trainer.train()
 
+    # Save
     model.save_pretrained(OUTPUT_DIR)
     tokenizer.save_pretrained(OUTPUT_DIR)
     print(f"\nModel saved to {OUTPUT_DIR}")
