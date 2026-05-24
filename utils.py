@@ -136,3 +136,31 @@ def call_uses_valid_params(input_call: str, valid_params: set[str]) -> bool:
     # Extract all kwarg names from the call string
     kwarg_names = set(re.findall(r"(\w+)\s*=", input_call))
     return kwarg_names.issubset(valid_params)
+
+def extract_body(solution_code: str) -> str:
+    """
+    Extracts the method body from the Solution class, dedented so it
+    aligns cleanly in the prompt.
+    
+    Example:
+        d = {}
+        for i, x in enumerate(nums):
+            ...
+    """
+    import textwrap
+    lines = []
+    inside_method = False
+
+    for line in solution_code.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("def ") and "self" in stripped:
+            inside_method = True
+            continue
+        if not inside_method:
+            continue
+        # Stop at next method or class definition
+        if stripped.startswith("def ") or stripped.startswith("class "):
+            break
+        lines.append(line)
+
+    return textwrap.dedent("\n".join(lines)).strip()

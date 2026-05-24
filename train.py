@@ -11,6 +11,7 @@ from utils import (
     simplify_assert,
     extract_input_args,
     extract_signature,
+    extract_body
 )
 
 # -- CONFIG -----------------------------------------------
@@ -70,11 +71,11 @@ def extract_input_calls(test_code: str, max_tests: int = 5) -> list[str]:
     return [all_calls[i] for i in indices]
 
 
-def build_prompt(signature: str) -> str:
+def build_prompt(signature: str, body: str) -> str:
     return (
-        "Generate Python test inputs.\n\n"
-        f"Function:\n{signature}\n\n"
-        "Inputs:\n"
+        "Generate an interesting test input that exercises edge cases.\n\n"
+        f"Function:\n{signature}\n{body}\n\n"
+        "Interesting input:\n"
     )
 
 
@@ -82,14 +83,15 @@ def build_pairs(data: list) -> list:
     pairs = []
     for item in data:
         signature = extract_signature(item["solution_code"])
-        calls = extract_input_calls(item["test_code"])
+        body      = extract_body(item["solution_code"])
+        calls     = extract_input_calls(item["test_code"])
 
         if not calls:
             continue
-        
+
         for call in calls:
             pairs.append({
-                "input":  build_prompt(signature),
+                "input":  build_prompt(signature, body),
                 "output": call,
             })
 

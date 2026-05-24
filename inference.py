@@ -6,6 +6,7 @@ from utils import (
     is_valid_python,
     extract_signature,
     extract_func_name,
+    extract_body,
     build_test_assertion,
     call_uses_valid_params,
     extract_param_names,
@@ -17,27 +18,26 @@ MODEL_PATH = "./testgen_model"
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# -- Step 1: Generate raw input calls from the model ----------------------------
-
-def generate_input_calls(
+def generate_inputs(
     model,
     tokenizer,
     device,
     signature: str,
+    body: str,
     valid_params: set[str],
     n: int = 8,
     max_new_tokens: int = 64,
 ) -> list[str]:
     prompt = (
-        "Generate Python test inputs.\n\n"
-        f"Function:\n{signature}\n\n"
-        "Inputs:\n"
+        "Generate an interesting test input that exercises edge cases.\n\n"
+        f"Function:\n{signature}\n{body}\n\n"
+        "Interesting input:\n"
     )
     inputs = tokenizer(
         prompt,
         return_tensors="pt",
         truncation=True,
-        max_length=192,
+        max_length=256,
     ).to(device)
 
     seen = set()
@@ -68,30 +68,6 @@ def generate_input_calls(
 
     return calls
 
-# -- Step 2: Execute each input call against the real solution ------------------
-
-def build_test_suite(
-    solution_code: str,
-    func_name: str,
-    input_calls: list[str],
-) -> list[str]:
-    """
-    For each input call, runs the real solution and builds a correct assert.
-    Skips any call that causes the solution to throw an exception.
-    
-    Returns a list of assert strings with verified expected values.
-    """
-    tests = []
-    for call in input_calls:
-        assertion = build_test_assertion(solution_code, func_name, call)
-        if assertion is not None:
-            tests.append(assertion)
-        else:
-            print(f"  [skip] execution failed for: {call}")
-    return tests
-
-# -- Main -----------------------------------------------------------------------
-
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -115,31 +91,21 @@ def main():
     
     signature = extract_signature(solution_code)
     func_name = extract_func_name(solution_code)
+    body = extract_body(solution_code)
     valid_params = extract_param_names(solution_code, func_name)
     
-    print(f"Signature: {signature}")
+    print(f"Function: {func_name}")
+    print(f"Params:   {valid_params}\n")
 
-    print("\nGenerating input calls...")
-    input_calls = generate_input_calls(model, tokenizer, device, signature, valid_params)
-    print(f"Raw model output ({len(input_calls)}) calls:")
-    for c in input_calls:
-        print(f"    {c}")
+    inputs = generate_inputs(model, tokenizer, device, signature, body, valid_params)
+
+    print(f"Suggested inputs ({len(inputs)}):")
+    for call in inputs:
+        print(f"  {call}")
     
-    print("\nBuilding test cases...")
-    tests = build_test_suite(solution_code, func_name, input_calls)
-
-    print(f"\nFinal tests ({len(tests)}):")
-    for t in tests:
-        print(f"    {t}")
-
-    result = {
-        "signature":    signature,
-        "input_calls":  input_calls,
-        "tests:":       tests,
-    }
-    out_path = os.path.join(OUTPUT_DIR, "inference_result.json")
+    out_path = os.path.join(OUTPUT_DIR, "suggested_inputs.json")
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2)
+        json.dump({"function": func_name, "inputs": inputs}, f, indent=2)
     print(f"\nSaved to {out_path}")
 
 if __name__ == "__main__":
