@@ -1,5 +1,6 @@
 import json
 import os
+import textwrap
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from utils import (
@@ -28,9 +29,12 @@ def generate_inputs(
     n: int = 8,
     max_new_tokens: int = 64,
 ) -> list[str]:
+    params_str = ", ".join(sorted(valid_params)) if valid_params else "(none)"
+
     prompt = (
         "Generate an interesting test input that exercises edge cases.\n\n"
         f"Function:\n{signature}\n{body}\n\n"
+        f"Parameters: {params_str}\n\n"
         "Interesting input:\n"
     )
     inputs = tokenizer(
@@ -59,9 +63,9 @@ def generate_inputs(
             continue
         if decoded in seen:
             continue
-        if not call_uses_valid_params(decoded, valid_params):
-            print(f"  [bad params] {decoded!r} — expected: {valid_params}")
-            continue
+        # if not call_uses_valid_params(decoded, valid_params):
+        #     print(f"  [bad params] {decoded!r} — expected: {valid_params}")
+        #     continue
 
         seen.add(decoded)
         calls.append(decoded)
@@ -75,19 +79,19 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, use_fast=False)
     model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_PATH).to(device)
 
-    solution_code = """
-        class Solution:
-            def lengthOfLongestSubstring(self, s: str) -> int:
-                d = {}
-                res = 0
-                left = 0
-                for right, c in enumerate(s):
-                    if c in d and d[c] >= left:
-                        left = d[c] + 1
-                    d[c] = right
-                    res = max(res, right - left + 1)
-                return res
-        """
+    solution_code = textwrap.dedent("""
+    class Solution:
+        def lengthOfLongestSubstring(self, s: str) -> int:
+            d = {}
+            res = 0
+            left = 0
+            for right, c in enumerate(s):
+                if c in d and d[c] >= left:
+                    left = d[c] + 1
+                d[c] = right
+                res = max(res, right - left + 1)
+            return res
+""").strip()
     
     signature = extract_signature(solution_code)
     func_name = extract_func_name(solution_code)

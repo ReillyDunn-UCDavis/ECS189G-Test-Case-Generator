@@ -126,6 +126,7 @@ def extract_signature(solution_code: str) -> str:
         stripped = re.sub(r"->\s*[\w\[\], ]+\s*:", ":", stripped)  # remove return type
         stripped = re.sub(r":\s*[\w\[\], ]+", "", stripped) # remove param types
         stripped = re.sub(r"\(,\s*", "(", stripped)         # fix leftover (, from self removal
+        stripped = re.sub(r"\s*:\s*$", ":", stripped)       # fix "def f(s) :" -> "def f(s):"
         lines.append(stripped)
     return "\n".join(lines)
 
@@ -141,7 +142,14 @@ def extract_func_name(solution_code: str) -> str | None:
             m = re.match(r"def (\w+)\(", stripped)
             if m and m.group(1) != "__init__":
                 return m.group(1)
+    for line in solution_code.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("def "):
+            m = re.match(r"def (\w+)\(", stripped)
+            if m and m.group(1) != "__init__":
+                return m.group(1)
     return None
+    
 
 
 def get_expected_output(solution_code: str, func_name: str, input_call: str):
@@ -187,8 +195,12 @@ def extract_param_names(solution_code: str, func_name: str) -> set[str]:
     ns = {}
     try:
         exec(textwrap.dedent(solution_code), ns)
-        sol_class = ns["Solution"]
-        func = getattr(sol_class, func_name)
+        if "Solution" in ns:
+            func = getattr(ns["Solution"], func_name)
+        elif func_name and func_name in ns:
+            func = ns[func_name]
+        else:
+            return set()
         params = inspect.signature(func).parameters
         return {p for p in params if p != "self"}
     except Exception:

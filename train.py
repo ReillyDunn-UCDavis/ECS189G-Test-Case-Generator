@@ -21,7 +21,7 @@ from utils import (
 MODEL_NAME   = "Salesforce/codet5-base"
 DATA_PATH    = "data/train.json"
 OUTPUT_DIR   = "./testgen_model"
-MAX_SAMPLES  = 5000
+#MAX_SAMPLES  = 5000
 MAX_TESTS    = 5
 INPUT_LEN    = 192
 OUTPUT_LEN   = 128
@@ -134,7 +134,7 @@ def main():
     # Load data
     with open("data/train.json", "r", encoding="utf-8") as f:
         train_data = json.load(f)
-    train_data = train_data[:MAX_SAMPLES]
+    #train_data = train_data[:MAX_SAMPLES]
 
     with open("data/test.json", "r", encoding="utf-8") as f:
         val_data = json.load(f)
