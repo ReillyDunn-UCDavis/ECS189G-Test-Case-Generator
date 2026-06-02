@@ -250,7 +250,7 @@ def add(a: int, b: int) -> int
     desc_input = st.text_area(
         label="function_input",
         value=default_desc,
-        height=320,
+        height=220,
         label_visibility="collapsed",
         placeholder="Paste your function description here...",
     )

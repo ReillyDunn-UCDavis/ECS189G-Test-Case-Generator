@@ -30,7 +30,10 @@ SYSTEM_PROMPT = (
     "Every assert must call candidate(...), not the original function name. "
     "Every assert have the correct output given the input."
     "Write exactly the requested number of assertions."
+    "Use the same style as the training data."
     "Do not write anything else."
+    "Do not explain anything."
+    "Do not write markdown."
 )
 
 
