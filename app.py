@@ -49,7 +49,8 @@ def generate_tests_real(code: str) -> str:
     body = extract_body(code)
     valid_params = extract_param_names(code, func_name)
 
-    calls = generate_inputs(
+    # generate_inputs now returns full "assert candidate(...) == ..." strings
+    assertions = generate_inputs(
         model=model,
         tokenizer=tokenizer,
         device=device,
@@ -58,10 +59,10 @@ def generate_tests_real(code: str) -> str:
         valid_params=valid_params,
     )
 
-    if not calls:
-        return "No valid test inputs generated."
+    if not assertions:
+        return "No valid test assertions generated."
 
-    return "\n".join(calls)
+    return "\n".join(assertions)
 
 
 # Mock model (used while real model is being trained)
@@ -69,12 +70,12 @@ def generate_tests_mock(code: str) -> str:
     """Return realistic-looking fake output for UI development."""
     time.sleep(1.5)  # simulate inference latency
     return """\
-assert candidate(1, 2) == 3
-assert candidate(0, 0) == 0
-assert candidate(-1, 1) == 0
-assert candidate(100, 200) == 300
-assert candidate(-5, -3) == -8
-assert candidate(0, 99) == 99"""
+assert candidate(s="") == 0
+assert candidate(s="a") == 1
+assert candidate(s="abcabcbb") == 3
+assert candidate(s="bbbbb") == 1
+assert candidate(s="pwwkew") == 3
+assert candidate(s="dvdf") == 3"""
 
 
 # Route to mock or real
@@ -172,8 +173,9 @@ st.markdown("""
         word-break: break-word;
         line-height: 1.7;
     }
-    .output-box .keyword   { color: #00ff87; }
-    .output-box .empty     { color: #444; font-style: italic; }
+    .output-box .kw-assert  { color: #00ff87; }
+    .output-box .kw-eq      { color: #888; }
+    .output-box .empty      { color: #444; font-style: italic; }
 
     /* Generate button */
     .stButton > button {
@@ -246,7 +248,7 @@ status_badge = (
 st.markdown(f"""
 <div class="title-block">
     <h1>Py<span>Test</span>Gen {status_badge}</h1>
-    <p>Paste a Python function, get unit test assertions back.</p>
+    <p>Paste a Python function, get full test assertions back.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -301,25 +303,40 @@ with col_out:
                     st.session_state.error = f"Model error: {e}"
                     st.session_state.output = None
 
-    # Render output
+    # Render output — highlight `assert` and `==` separately
+    def highlight_assertion(line: str) -> str:
+        """Color the assert keyword and == operator distinctly."""
+        import re
+        line = re.sub(
+            r"^(assert)\s",
+            r'<span class="kw-assert">\1</span> ',
+            line,
+        )
+        line = re.sub(
+            r"\s(==)\s",
+            r' <span class="kw-eq">==</span> ',
+            line,
+        )
+        return line
+
     if st.session_state.error:
         st.error(st.session_state.error)
     elif st.session_state.output:
-        # Syntax-highlight assert keyword
-        highlighted = st.session_state.output.replace(
-            "assert", '<span class="keyword">assert</span>'
-        )
+        highlighted_lines = [
+            highlight_assertion(line)
+            for line in st.session_state.output.splitlines()
+        ]
+        highlighted = "\n".join(highlighted_lines)
         st.markdown(
             f'<div class="output-box">{highlighted}</div>',
             unsafe_allow_html=True
         )
-        # Copy button via st.code (clean copyable block below the styled one)
         with st.expander("Copy the output..."):
             st.code(st.session_state.output, language="python")
     else:
         st.markdown(
             '<div class="output-box"><span class="empty">'
-            'Generated test cases will appear here...'
+            'Generated test assertions will appear here...'
             '</span></div>',
             unsafe_allow_html=True
         )

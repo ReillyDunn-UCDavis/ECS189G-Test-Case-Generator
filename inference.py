@@ -8,7 +8,6 @@ from utils import (
     extract_signature,
     extract_func_name,
     extract_body,
-    build_test_assertion,
     call_uses_valid_params,
     extract_param_names,
 )
@@ -29,13 +28,20 @@ def generate_inputs(
     n: int = 8,
     max_new_tokens: int = 64,
 ) -> list[str]:
+    """
+    Generates n unique test assertions of the form:
+        assert candidate(...) == <expected>
+
+    The model is responsible for predicting both the input arguments
+    and the expected return value.
+    """
     params_str = ", ".join(sorted(valid_params)) if valid_params else "(none)"
 
     prompt = (
-        "Generate an interesting test input that exercises edge cases.\n\n"
+        "Generate a test assertion with input and expected output.\n\n"
         f"Function:\n{signature}\n{body}\n\n"
         f"Parameters: {params_str}\n\n"
-        "Interesting input:\n"
+        "Test assertion:\n"
     )
     inputs = tokenizer(
         prompt,
@@ -45,7 +51,7 @@ def generate_inputs(
     ).to(device)
 
     seen = set()
-    calls = []
+    assertions = []
 
     for _ in range(n):
         output = model.generate(
@@ -57,20 +63,23 @@ def generate_inputs(
         )
         decoded = tokenizer.decode(output[0], skip_special_tokens=True).strip()
 
-        if not decoded.startswith("candidate("):
+        # Must be a full assertion
+        if not decoded.startswith("assert candidate("):
             continue
+        # Must contain == to have an expected value
+        if " == " not in decoded:
+            continue
+        # Must be syntactically valid Python
         if not is_valid_python(decoded):
             continue
+        # No duplicates
         if decoded in seen:
             continue
-        # if not call_uses_valid_params(decoded, valid_params):
-        #     print(f"  [bad params] {decoded!r} — expected: {valid_params}")
-        #     continue
 
         seen.add(decoded)
-        calls.append(decoded)
+        assertions.append(decoded)
 
-    return calls
+    return assertions
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -92,24 +101,24 @@ def main():
                 res = max(res, right - left + 1)
             return res
 """).strip()
-    
+
     signature = extract_signature(solution_code)
     func_name = extract_func_name(solution_code)
     body = extract_body(solution_code)
     valid_params = extract_param_names(solution_code, func_name)
-    
+
     print(f"Function: {func_name}")
     print(f"Params:   {valid_params}\n")
 
-    inputs = generate_inputs(model, tokenizer, device, signature, body, valid_params)
+    assertions = generate_inputs(model, tokenizer, device, signature, body, valid_params)
 
-    print(f"Suggested inputs ({len(inputs)}):")
-    for call in inputs:
-        print(f"  {call}")
-    
+    print(f"Generated assertions ({len(assertions)}):")
+    for a in assertions:
+        print(f"  {a}")
+
     out_path = os.path.join(OUTPUT_DIR, "suggested_inputs.json")
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"function": func_name, "inputs": inputs}, f, indent=2)
+        json.dump({"function": func_name, "assertions": assertions}, f, indent=2)
     print(f"\nSaved to {out_path}")
 
 if __name__ == "__main__":

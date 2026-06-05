@@ -162,7 +162,22 @@ def get_expected_output(solution_code: str, func_name: str, input_call: str):
     
     Returns the result, or raises an exception if execution fails.
     """
+    import collections
+    import functools
+    import itertools
+    import math
+    import bisect
+    import heapq
+
     ns = {}
+
+    ns.update(collections.__dict__)
+    ns.update(functools.__dict__)
+    ns.update(itertools.__dict__)
+    ns.update(math.__dict__)
+    ns.update(bisect.__dict__)
+    ns.update(heapq.__dict__)
+    
     exec(textwrap.dedent(solution_code), ns)
     sol = ns["Solution"]()
     func = getattr(sol, func_name)

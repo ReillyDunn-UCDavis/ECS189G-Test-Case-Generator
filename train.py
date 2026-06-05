@@ -14,6 +14,7 @@ from utils import (
     extract_body,
     generate_edge_case_call,
     extract_func_name,
+    build_test_assertion,
 )
 
 # -- CONFIG -----------------------------------------------
@@ -28,13 +29,16 @@ OUTPUT_LEN   = 128
 
 # -- Data Helpers -------------------------------------------
 
-def extract_input_calls(test_code: str, max_tests: int = 5) -> list[str]:
+def extract_full_assertions(test_code: str, solution_code: str, max_tests: int = 5) -> list[str]:
     """
-    Returns up to max_tests input calls sampled across the full check()
-    function rather than taken from the top.  Spread ensures diversity
-    (early tests tend to be similar; later ones cover edge cases).
+    Returns up to max_tests full assert statements sampled across the full
+    check() function. Each assertion is the complete string:
+        assert candidate(...) == <expected>
+
+    Spread sampling ensures diversity (early tests tend to be similar;
+    later ones cover edge cases).
     """
-    all_calls = []
+    all_assertions = []
     inside_check = False
 
     for line in test_code.split("\n"):
@@ -54,51 +58,58 @@ def extract_input_calls(test_code: str, max_tests: int = 5) -> list[str]:
         if "sorted(" in stripped:
             continue
 
-        call = extract_input_args(stripped)
-        if call is None:
-            continue
-        if not is_valid_python(call):
+        # Keep the full assert, not just the input args
+        if not is_valid_python(stripped):
             continue
 
-        all_calls.append(call)
+        # Must match the standard pattern: assert candidate(...) == <val>
+        if not stripped.startswith("assert candidate("):
+            continue
 
-    if not all_calls:
+        all_assertions.append(stripped)
+
+    if not all_assertions:
         return []
 
-    if len(all_calls) <= max_tests:
-        return all_calls
+    if len(all_assertions) <= max_tests:
+        return all_assertions
 
-    step = len(all_calls) / max_tests
+    step = len(all_assertions) / max_tests
     indices = [int(i * step) for i in range(max_tests)]
-    return [all_calls[i] for i in indices]
+    return [all_assertions[i] for i in indices]
 
 
 def build_prompt(signature: str, body: str) -> str:
     return (
-        "Generate an interesting test input that exercises edge cases.\n\n"
+        "Generate a test assertion with input and expected output.\n\n"
         f"Function:\n{signature}\n{body}\n\n"
-        "Interesting input:\n"
+        "Test assertion:\n"
     )
 
 
 def build_pairs(data: list) -> list:
     pairs = []
     for item in data:
-        signature = extract_signature(item["solution_code"])
-        body      = extract_body(item["solution_code"])
-        calls     = extract_input_calls(item["test_code"])
+        solution_code = item["solution_code"]
+        signature     = extract_signature(solution_code)
+        body          = extract_body(solution_code)
+        func_name     = extract_func_name(solution_code)
+        assertions    = extract_full_assertions(item["test_code"], solution_code)
 
-        if not calls:
+        if not assertions:
             continue
 
-        edge = generate_edge_case_call(item["solution_code"], extract_func_name(item["solution_code"]))
-        if edge and edge not in calls:
-            calls.insert(0, edge)
+        # # Attempt to add one edge-case assertion via execution
+        # edge_call = generate_edge_case_call(solution_code, func_name)
+        # if edge_call:
+        #     edge_assert = build_test_assertion(solution_code, func_name, edge_call)
+        #     if edge_assert and edge_assert not in assertions:
+        #         assertions.insert(0, edge_assert)
 
-        for call in calls:
+        for assertion in assertions:
             pairs.append({
                 "input":  build_prompt(signature, body),
-                "output": call,
+                "output": assertion,          # full "assert candidate(...) == ..."
             })
 
     return pairs
@@ -143,6 +154,11 @@ def main():
     train_pairs = build_pairs(train_data)
     val_pairs   = build_pairs(val_data)
     print(f"Train: {len(train_pairs)}  Val: {len(val_pairs)}")
+
+    # Sanity-check: print a few examples so you can verify the format
+    print("\nSample training targets:")
+    for p in train_pairs[:3]:
+        print(f"  {p['output']}")
 
     # Load model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=False)
