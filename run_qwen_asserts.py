@@ -36,7 +36,6 @@ model.eval()
 
 def get_response(description, signature,n):
 
-    
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": 
@@ -46,27 +45,21 @@ def get_response(description, signature,n):
         f"{signature}\n\n"
         f"Write exactly {n} assert statements"
         },
-        {"role": "assistant", "content": "assert "},
-    ]
+        {"role": "assistant", "content": "assert "}]
     print(messages)
     text = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
-        add_generation_prompt=True,
-    )
+        add_generation_prompt=True)
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
-
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=512,
             do_sample=False,
         )
- 
-    arr= tokenizer.decode(
-        outputs[0][inputs["input_ids"].shape[1]:],
-        skip_special_tokens=True,
-    )
+
+    arr= tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:],skip_special_tokens=True,)
 
     return arr
 

@@ -14,15 +14,7 @@ from transformers import (
     TrainingArguments,
 )
 
-# This is the system prompt for the model to avoid writing anything but asserts
-#SYSTEM_PROMPT = (
-#    "You write Python assert statements only."
-#    "Every line must start with 'assert'. "
-#    "Every assert must call candidate(...), not the original function name. "
-#    "Do not explain anything. "
-#    "Do not write markdown. "
-#    "Do not write a solution."
-#)
+
 
 SYSTEM_PROMPT = (
     "You write Python assert statements only."
@@ -59,11 +51,7 @@ def extract_function_signature(solution_code):
 
 # Get all assert statements from test_code
 def extract_asserts(test_code, max_asserts):
-    return [
-        line.strip()
-        for line in test_code.splitlines()
-        if line.strip().startswith("assert")
-    ][:max_asserts]
+    return [line.strip() for line in test_code.splitlines() if line.strip().startswith("assert") ][:max_asserts]
 
 
 # Create user prompt that has problem description and function signature from example
@@ -94,11 +82,7 @@ def build_text(example, tokenizer, max_asserts):
          },
         {"role": "assistant", "content": "\n".join(asserts)},
     ]
-    return tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=False,
-    )
+    return tokenizer.apply_chat_template(messages,tokenize=False,add_generation_prompt=False)
 
 # Create training dataset from JSON file and convert into list of prompts
 def build_dataset(path, tokenizer, max_items, max_asserts):
@@ -116,15 +100,12 @@ def build_dataset(path, tokenizer, max_items, max_asserts):
 
     return Dataset.from_list(rows)
 
+
 # Convert dataset into token IDs via tokenizer
 def tokenize_dataset(dataset, tokenizer, max_length):
     def tokenize(example):
-        return tokenizer(
-            example["text"],
-            truncation=True,
-            max_length=max_length,
-        )
-
+        return tokenizer(example["text"],truncation=True,
+            max_length=max_length,)
     return dataset.map(tokenize, remove_columns=["text"])
 
 
@@ -154,20 +135,10 @@ def main():
 
 
     # Create training dataset from train path
-    train_dataset = build_dataset(
-        args.train_path,
-        tokenizer,
-        args.max_train_items,
-        args.max_asserts,
-    )
+    train_dataset = build_dataset(args.train_path,tokenizer,args.max_train_items,args.max_asserts,)
 
     # Create validation dataset from validation path
-    val_dataset = build_dataset(
-        args.val_path,
-        tokenizer,
-        args.max_val_items,
-        args.max_asserts,
-    )
+    val_dataset = build_dataset(args.val_path,tokenizer,args.max_val_items,args.max_asserts)
 
     # Tokenize datasets
     train_dataset = tokenize_dataset(train_dataset, tokenizer, args.max_length)
@@ -175,12 +146,7 @@ def main():
 
 
     # Use quantization to improve memory usage
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.float16,
-    )
+    quantization_config = BitsAndBytesConfig(load_in_4bit=True,bnb_4bit_quant_type="nf4",bnb_4bit_use_double_quant=True,bnb_4bit_compute_dtype=torch.float16,)
 
     # Load model
     model = AutoModelForCausalLM.from_pretrained(
@@ -193,11 +159,7 @@ def main():
     model = prepare_model_for_kbit_training(model)
 
     # Set up LoRA(Low rank adapation) config used for fine-tuning
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.05,
-        bias="none",
+    lora_config = LoraConfig(r=16,lora_alpha=32,lora_dropout=0.05,bias="none",
         task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
@@ -223,8 +185,7 @@ def main():
         greater_is_better=False,
         report_to="none",
         bf16=False,
-        fp16=True,
-    )
+        fp16=True)
 
     # Train Model
     trainer = Trainer(
@@ -232,8 +193,7 @@ def main():
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
-    )
+        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False))
 
     trainer.train()
 
